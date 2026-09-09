@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KiloCode Token 统计面板</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#0f1115; --card:#1a1d23; --border:#2a2d35; --txt:#e8e8ea; --txt2:#a0a3ab; --txt3:#6e717a;
+  --brand:#3b82f6; --brand-soft:#1e2a3a;
+  --ok:#22c55e; --warn:#f59e0b; --algo:#ef4444;
+  --muted-strong:#9aa0a8;
+  --ok-a25:rgba(34,197,94,.25); --ok-a50:rgba(34,197,94,.5); --ok-a75:rgba(34,197,94,.75);
+  --brand-a22:rgba(59,130,246,.22); --brand-a38:rgba(59,130,246,.38); --brand-a60:rgba(59,130,246,.6);
+}
+[data-theme="light"]{
+  --bg:#f5f5f7; --card:#ffffff; --border:#e5e5e7; --txt:#1d1d1f; --txt2:#6e6e73; --txt3:#86868b;
+  --brand:#0071e3; --brand-soft:#e8f0fe;
+  --ok:#34c759; --warn:#ff9500; --algo:#ff3b30;
+  --muted-strong:#4a4d52;
+  --ok-a25:rgba(52,199,89,.25); --ok-a50:rgba(52,199,89,.5); --ok-a75:rgba(52,199,89,.75);
+  --brand-a22:rgba(0,113,227,.22); --brand-a38:rgba(0,113,227,.38); --brand-a60:rgba(0,113,227,.6);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;font-size:14px;line-height:1.6;transition:background .25s,color .25s}
+.wrap{max-width:1400px;margin:0 auto;padding:18px 20px 60px}
+
+/* Header */
+.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:12px}
+.header h1{font-size:20px;font-weight:700;display:flex;align-items:center;gap:8px}
+.header h1 .dot{width:10px;height:10px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px rgba(34,197,94,.4)}
+.live-badge{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--txt3);background:var(--card);border:1px solid var(--border);border-radius:10px;padding:6px 12px;font-variant-numeric:tabular-nums}
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--ok);animation:pulse 1s infinite}
+@keyframes pulse{0%{opacity:1;box-shadow:0 0 0 0 rgba(34,197,94,.5)}70%{opacity:.5;box-shadow:0 0 0 6px rgba(34,197,94,0)}100%{opacity:1;box-shadow:0 0 0 0 rgba(34,197,94,0)}}
+.live-badge.stale .live-dot{background:var(--algo);animation:none}
+.theme-switch{display:flex;gap:2px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:3px}
+.theme-btn{font-size:12px;color:var(--txt2);padding:5px 12px;border-radius:7px;border:none;background:transparent;cursor:pointer;transition:.15s;font-weight:500}
+.theme-btn:hover{color:var(--txt)}
+.theme-btn.active{background:var(--brand);color:#fff;font-weight:600}
+
+/* Cards */
+.cards{display:grid;grid-template-columns:1fr 1fr 3fr;gap:14px;margin-bottom:18px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:background .25s,border-color .25s}
+.card .label{font-size:12.5px;color:var(--txt3);margin-bottom:6px}
+.card .value{font-size:28px;font-weight:800;line-height:1.2;font-variant-numeric:tabular-nums}
+.card .raw{font-size:11.5px;color:var(--txt3);margin-top:4px;font-weight:400;letter-spacing:.3px;font-variant-numeric:tabular-nums}
+.card .value .inline-raw{font-size:12px;color:var(--txt3);font-weight:600;margin-left:8px;letter-spacing:.3px;white-space:nowrap}
+.today-main{color:#f59e0b;font-weight:800;font-size:clamp(32px,4.2vw,60px);line-height:1.05;font-variant-numeric:tabular-nums;letter-spacing:-1px;white-space:nowrap}
+.today-main .today-unit{font-size:16px;font-weight:600;color:var(--txt3);margin-left:8px;letter-spacing:.3px}
+.today-sub{font-size:14px;color:var(--txt2);margin-top:6px;font-weight:600;font-variant-numeric:tabular-nums}
+.card.accent .value{color:var(--brand)}
+.card.ok .value{color:var(--ok)}
+.card.warn .value{color:var(--warn)}
+
+/* Grid */
+.grid-2{display:grid;grid-template-columns:1fr 2fr;gap:16px;margin-bottom:18px}
+@media(max-width:1100px){.grid-2{grid-template-columns:1fr}}
+.grid-2 .card{height:460px;display:flex;flex-direction:column}
+.grid-2 .card h3{flex:none}
+.grid-2 .card .cal-wrap{flex:1;min-height:0}
+
+/* Section titles */
+.card h3{font-size:15px;margin-bottom:14px;display:flex;align-items:center;gap:8px;font-weight:600}
+.card h3 .sub{font-size:12px;color:var(--txt3);font-weight:400;margin-left:auto}
+
+/* Calendar Heatmap */
+.cal-wrap{overflow-x:auto;overflow-y:auto;max-height:420px;padding-bottom:8px}
+.cal-inner{display:inline-block;min-width:fit-content}
+.cal-body{display:flex;flex-direction:column;gap:6px}
+.cal-week{display:flex;gap:6px;align-items:center}
+.cal-cells{display:flex;gap:6px}
+.cal-cell{width:28px;height:28px;border-radius:6px;background:var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--txt3);cursor:pointer;transition:.15s;position:relative;flex:none;user-select:none}
+.cal-cell:hover{outline:2px solid var(--brand);outline-offset:1px;z-index:10}
+.cal-cell.has-data{color:var(--txt);font-weight:600}
+.cal-cell.l1{background:var(--ok-a25);color:var(--txt)}
+.cal-cell.l2{background:var(--ok-a50)}
+.cal-cell.l3{background:var(--ok-a75)}
+.cal-cell.l4{background:var(--ok);color:#fff}
+.cal-cell.empty{background:transparent;cursor:default}.cal-cell.empty:hover{outline:none}
+.cal-cell.in-range{outline:2px solid var(--brand);outline-offset:-2px;background:var(--brand-a22)!important}
+.cal-cell.range-start{outline:2px solid var(--brand);outline-offset:-2px;background:var(--brand-a38)!important}
+.cal-cell.range-end{outline:2px solid var(--brand);outline-offset:-2px;background:var(--brand-a38)!important}
+.cal-cell.selected{outline:2px solid var(--brand);outline-offset:-2px;background:var(--brand-a60);color:#fff!important}
+.cal-selection{font-size:12px;color:var(--txt3);margin-top:8px;min-height:18px;display:flex;align-items:center;gap:8px}
+.cal-selection strong{color:var(--brand)}
+.clear-sel{background:transparent;border:1px solid var(--border);color:var(--txt3);border-radius:6px;padding:1px 8px;font-size:11px;cursor:pointer}
+.clear-sel:hover{border-color:var(--algo);color:var(--algo)}
+
+/* Scrollbar */
+.cal-wrap::-webkit-scrollbar,#modelList::-webkit-scrollbar,.sess-wrap::-webkit-scrollbar{width:8px;height:8px}
+.cal-wrap::-webkit-scrollbar-thumb,#modelList::-webkit-scrollbar-thumb,.sess-wrap::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+.cal-wrap::-webkit-scrollbar-thumb:hover,#modelList::-webkit-scrollbar-thumb:hover,.sess-wrap::-webkit-scrollbar-thumb:hover{background:var(--txt3)}
+.cal-wrap::-webkit-scrollbar-track,#modelList::-webkit-scrollbar-track,.sess-wrap::-webkit-scrollbar-track{background:transparent}
+
+/* Tooltip */
+.cal-tooltip{display:none;position:fixed;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:12.5px;color:var(--txt);pointer-events:none;z-index:1000;box-shadow:0 6px 20px rgba(0,0,0,.35);min-width:140px}
+.cal-tooltip.show{display:block}
+.cal-tooltip .tt-date{font-weight:700;margin-bottom:4px;color:var(--txt)}
+.cal-tooltip .tt-val{color:var(--brand);font-weight:600;font-size:14px}
+.cal-tooltip .tt-msgs{color:var(--txt3);margin-top:2px}
+
+/* Charts */
+.chart-box{position:relative;height:320px}
+
+/* Model header line */
+.model-total{font-size:14px;color:var(--muted-strong);margin-bottom:10px;font-variant-numeric:tabular-nums}
+.model-total b{color:#f59e0b;font-weight:700;font-size:16px;font-variant-numeric:tabular-nums}
+
+/* Session board */
+.sess-wrap{overflow:auto;max-height:420px}
+table.sess{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
+.sess th{position:sticky;top:0;background:var(--card);color:var(--txt3);text-align:left;font-weight:600;padding:9px 10px;border-bottom:1px solid var(--border);white-space:nowrap;z-index:2}
+.sess td{padding:7px 10px;border-bottom:1px solid var(--border);color:var(--txt2);white-space:nowrap}
+.sess td.num{text-align:right;font-variant-numeric:tabular-nums;color:var(--txt)}
+.sess td.in{text-align:right;font-variant-numeric:tabular-nums;color:var(--txt2)}
+.sess td.out{text-align:right;font-variant-numeric:tabular-nums;color:var(--brand)}
+.sess td.sum{text-align:right;font-variant-numeric:tabular-nums;color:var(--ok);font-weight:600}
+.sess td.preview{white-space:normal;max-width:300px;color:var(--txt3);font-size:11.5px}
+.sess tbody tr:hover td{background:var(--brand-soft)}
+.sess .tag{display:inline-block;padding:1px 6px;border-radius:5px;background:var(--brand-soft);color:var(--brand);font-size:11px}
+
+/* Footer */
+.footer{margin-top:28px;text-align:center;color:var(--txt3);font-size:12px;line-height:1.9}
+
+/* Mobile / narrow screens */
+@media(max-width:640px){
+  .wrap{padding:12px 12px 48px}
+  .header{margin-bottom:14px}
+  .header h1{font-size:16px}
+  .live-badge{font-size:11px;padding:4px 8px}
+  .theme-btn{padding:4px 8px;font-size:11px}
+  .cards{grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+  .card{padding:14px 14px}
+  .card .value{font-size:22px}
+  .grid-2{gap:12px}
+  .grid-2 .card{height:auto}
+  .grid-2 .card .cal-wrap{max-height:360px}
+  .model-total{font-size:13px}
+  .model-total b{font-size:15px}
+  table.sess{font-size:11px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header">
+    <h1><span class="dot"></span>KiloCode Token 统计面板</h1>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span class="live-badge" title="每秒自动轮询；数值只在 KiloCode 写入新消息时变化"><span class="live-dot"></span>更新 <span id="lastUpdate">--:--:--</span></span>
+      <div class="theme-switch" id="themeSwitch">
+        <button class="theme-btn active" data-theme="dark" title="暗色">暗色</button>
+        <button class="theme-btn" data-theme="light" title="浅色">浅色</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats Cards -->
+  <div class="cards">
+    <div class="card accent">
+      <div class="label">累计 Token 数</div>
+      <div class="value" id="totalTokens">-</div>
+      <div class="raw">用了 <span id="totalTokensRaw">0</span> tokens</div>
+    </div>
+    <div class="card accent">
+      <div class="label">选中日期消耗</div>
+      <div class="value" id="selectedDateTokens">-</div>
+      <div class="raw" id="selectedDateLabel">请在日历中选择日期</div>
+    </div>
+    <div class="card ok">
+      <div class="label">今日用量</div>
+      <div class="today-main"><span id="todayTokensRaw">0</span><span class="today-unit">tokens</span></div>
+      <div class="today-sub"><span id="todayTokens">-</span></div>
+    </div>
+  </div>
+
+  <!-- Activity + Model -->
+  <div class="grid-2">
+    <div class="card">
+      <h3>Token 活动 <span class="sub" id="activityRange"></span></h3>
+      <div class="cal-wrap"><div class="cal-inner" id="heatmap"></div></div>
+      <div class="cal-selection" id="calSelection"></div>
+    </div>
+    <div class="card">
+      <h3>模型用量</h3>
+      <div style="display:flex;gap:24px;flex:1;min-height:0">
+        <div class="chart-box" style="height:360px;flex:1;min-width:0"><canvas id="modelChart"></canvas></div>
+        <div style="display:flex;flex-direction:column;flex:1;min-width:0">
+          <div class="model-total"><span id="modelTotalPrefix">累计消耗：</span><b id="modelTotalNum">0</b> tokens</div>
+          <div id="modelList" style="overflow-y:auto;flex:1;min-height:0"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Session Board -->
+  <div class="card">
+    <h3>会话看板 <span class="sub">最近 100 条请求 · 每秒刷新</span></h3>
+    <div class="sess-wrap">
+      <table class="sess">
+        <thead>
+          <tr>
+            <th>时间</th><th>路由</th><th>模型</th>
+            <th style="text-align:right">输入</th><th style="text-align:right">输出</th>
+            <th style="text-align:right">推理</th><th style="text-align:right">缓存读</th>
+            <th style="text-align:right">总计</th><th>所属会话</th>
+          </tr>
+        </thead>
+        <tbody id="sessBody"><tr><td colspan="9" style="text-align:center;color:var(--txt3);padding:20px">加载中…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="cal-tooltip" id="calTooltip">
+    <div class="tt-date" id="ttDate"></div>
+    <div class="tt-val" id="ttVal"></div>
+    <div class="tt-msgs" id="ttMsgs"></div>
+  </div>
+
+  <div class="footer">
+    数据来源：KiloCode 本地数据库 (kilo.db) · 每秒自动刷新 · 关闭页面不会影响数据
+  </div>
+</div>
+
+<script>
+const API_BASE = "";
+let modelChart = null;
+let calendarSelection = null; // {start, end} or null
+let dateToCell = {};
+let isDragging = false;
+let dragStart = null, dragEnd = null;
+let dailyData = [];
+let summaryTotal = 0;
+let modelSeries = [];
+const chartColors = ["#3b82f6","#22c55e","#f59e0b","#ef4444","#8b5cf6","#ec4899","#06b6d4","#84cc16"];
+
+// ---- Rolling number animation + change detection ----
+const numState = new Map();
+let lastSig = "";
+function animateNum(el, target, fmt){
+  if(!el) return;
+  target = target || 0;
+  const prev = numState.get(el) || 0;
+  if(prev === target){ el.textContent = fmt(target); return; }
+  numState.set(el, target);
+  const from = prev, start = performance.now(), dur = 600;
+  function step(now){
+    const t = Math.min(1,(now-start)/dur);
+    const e = 1 - Math.pow(1-t,3);
+    el.textContent = fmt(Math.round(from+(target-from)*e));
+    if(t<1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+function formatNum(n){ if(n>=100000000) return (n/100000000).toFixed(2)+"亿"; if(n>=10000) return (n/10000).toFixed(1)+"万"; return (n||0).toLocaleString(); }
+function formatYiWan(n){
+  n = n || 0;
+  if(n >= 100000000){
+    const yi = Math.floor(n / 100000000);
+    const wan = Math.floor((n % 100000000) / 10000);
+    return wan > 0 ? `${yi}亿${wan}万` : `${yi}亿`;
+  }
+  if(n >= 10000) return (n/10000).toFixed(1)+"万";
+  return n.toLocaleString();
+}
+function esc(s){ return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function cssVar(name, fb){ const v=getComputedStyle(document.documentElement).getPropertyValue(name).trim(); return v||fb; }
+
+async function api(path){
+  const url = `${API_BASE}${path}?_t=${Date.now()}`;
+  const r = await fetch(url);
+  if(!r.ok) throw new Error("HTTP "+r.status);
+  return r.json();
+}
+
+async function refresh(){
+  try{
+    const [summary, daily, activity, today, sessions] = await Promise.all([
+      api("/api/summary"),
+      api("/api/daily"),
+      api("/api/activity"),
+      api("/api/today"),
+      api("/api/sessions")
+    ]);
+    document.getElementById("lastUpdate").textContent = new Date().toLocaleTimeString("zh-CN",{hour12:false});
+    document.querySelector(".live-badge").classList.remove("stale");
+
+    // 数据签名：只有 token 消耗真正变化时才重绘，否则跳过（时钟仍在跳，证明轮询在跑）
+    const first = sessions[0] ? (sessions[0].time + ":" + sessions[0].total) : "";
+    const sig = [summary.total_tokens, today.total_tokens, activity.end, sessions.length, first].join("|");
+    if(sig === lastSig) return;
+    lastSig = sig;
+
+    dailyData = daily;
+    summaryTotal = summary.total_tokens;
+
+    animateNum(document.getElementById("totalTokens"), summary.total_tokens, formatNum);
+    animateNum(document.getElementById("totalTokensRaw"), summary.total_tokens, v=>v.toLocaleString());
+    animateNum(document.getElementById("todayTokens"), today.total_tokens, formatYiWan);
+    animateNum(document.getElementById("todayTokensRaw"), today.total_tokens, v=>v.toLocaleString());
+    document.getElementById("activityRange").textContent = activity.start ? `${activity.start} ~ ${activity.end}` : "暂无数据";
+
+    if(!isDragging) renderHeatmap(activity);
+    renderSessions(sessions);
+    updateDerived();
+  }catch(e){ console.error("refresh failed", e); document.querySelector(".live-badge").classList.add("stale"); }
+}
+
+// ---- Calendar selection ----
+function dateKey(d){ return d.toISOString().slice(0,10); }
+function paintRange(s,e){
+  Object.entries(dateToCell).forEach(([dk,cell])=>{
+    cell.classList.remove("in-range","range-start","range-end","selected");
+    if(!s||!e) return;
+    if(dk===s&&dk===e) cell.classList.add("selected");
+    else if(dk===s) cell.classList.add("range-start");
+    else if(dk===e) cell.classList.add("range-end");
+    else if(dk>s&&dk<e) cell.classList.add("in-range");
+  });
+}
+function paintSelection(){ if(calendarSelection) paintRange(calendarSelection.start, calendarSelection.end); }
+
+function renderHeatmap(activity){
+  const container=document.getElementById("heatmap");
+  const wrap=document.querySelector(".cal-wrap");
+  const prevScroll=wrap?wrap.scrollTop:0;
+  const prevScrollX=wrap?wrap.scrollLeft:0;
+  container.innerHTML="";
+  dateToCell={};
+  if(!activity.start){ container.innerHTML='<div style="color:var(--txt3);padding:20px;text-align:center">暂无数据</div>'; return; }
+
+  const daily=activity.daily||{};
+  const vals=Object.values(daily).map(d=>d.total_tokens);
+  const maxVal=Math.max(...vals,1);
+  const start=new Date(activity.start);
+  const end=new Date(activity.end);
+  const PER_ROW=12;
+
+  const calDiv=document.createElement("div");
+  calDiv.className="cal-inner";
+  const bodyDiv=document.createElement("div");
+  bodyDiv.className="cal-body";
+
+  let cur=new Date(start);
+  let rowDiv=null;
+  let idx=0;
+
+  const tooltip=document.getElementById("calTooltip");
+  const ttDate=document.getElementById("ttDate");
+  const ttVal=document.getElementById("ttVal");
+  const ttMsgs=document.getElementById("ttMsgs");
+
+  while(cur<=end){
+    if(idx%PER_ROW===0){ rowDiv=document.createElement("div"); rowDiv.className="cal-week"; bodyDiv.appendChild(rowDiv); }
+    const dk=dateKey(cur);
+    const cell=document.createElement("div");
+    cell.className="cal-cell";
+    const val=daily[dk]?daily[dk].total_tokens:0;
+    const msgs=daily[dk]?daily[dk].msg_count:0;
+    const ratio=val/maxVal;
+    if(val>0){
+      cell.classList.add("has-data");
+      cell.classList.add(ratio>0.75?"l4":ratio>0.5?"l3":ratio>0.25?"l2":"l1");
+    }
+    cell.dataset.date=dk;
+    dateToCell[dk]=cell;
+
+    cell.addEventListener("mousedown",(e)=>{ e.preventDefault(); isDragging=true; dragStart=dk; dragEnd=dk; paintRange(dk,dk); });
+    cell.addEventListener("mouseenter",(e)=>{
+      if(isDragging){ dragEnd=dk; const s=dragStart<dragEnd?dragStart:dragEnd, en=dragStart<dragEnd?dragEnd:dragStart; paintRange(s,en); }
+      ttDate.textContent=dk;
+      ttVal.textContent=val>0?formatNum(val)+" tokens":"0 tokens";
+      ttMsgs.textContent=msgs>0?`${msgs} 条消息`:"";
+      tooltip.classList.add("show");
+      positionTooltip(e);
+    });
+    cell.addEventListener("mousemove",positionTooltip);
+    cell.addEventListener("mouseleave",()=>tooltip.classList.remove("show"));
+
+    rowDiv.appendChild(cell);
+    idx++;
+    cur.setDate(cur.getDate()+1);
+  }
+  calDiv.appendChild(bodyDiv);
+  container.appendChild(calDiv);
+  paintSelection();
+  if(wrap){ wrap.scrollTop=prevScroll; wrap.scrollLeft=prevScrollX; }
+}
+
+function positionTooltip(e){
+  const tooltip=document.getElementById("calTooltip");
+  tooltip.style.left=(e.clientX+12)+"px";
+  tooltip.style.top=(e.clientY-12)+"px";
+}
+
+document.addEventListener("mouseup",()=>{
+  if(!isDragging) return;
+  isDragging=false;
+  if(dragStart&&dragEnd){
+    const s=dragStart<dragEnd?dragStart:dragEnd;
+    const e=dragStart<dragEnd?dragEnd:dragStart;
+    calendarSelection={start:s,end:e};
+    updateSelLabel();
+    updateDerived();
+  }
+});
+
+function updateSelLabel(){
+  const el=document.getElementById("calSelection");
+  if(!calendarSelection){ el.innerHTML=""; return; }
+  const s=new Date(calendarSelection.start), e=new Date(calendarSelection.end);
+  const sTxt=`${s.getMonth()+1}月${s.getDate()}日`, eTxt=`${e.getMonth()+1}月${e.getDate()}日`;
+  const label = calendarSelection.start===calendarSelection.end ? `<strong>${sTxt}</strong>` : `<strong>${sTxt}</strong> 至 <strong>${eTxt}</strong>`;
+  el.innerHTML=`已选择：${label} <button class="clear-sel" id="clearSel">清除</button>`;
+  document.getElementById("clearSel").addEventListener("click",()=>{ calendarSelection=null; paintRange(null,null); updateSelLabel(); updateDerived(); });
+}
+
+// ---- Derived: selected card + model chart from cached daily data ----
+function aggregateModels(daily,start,end){
+  const map={};
+  for(const it of daily){
+    if(start&&end&&(it.date<start||it.date>end)) continue;
+    const k=it.provider+" / "+it.model;
+    if(!map[k]) map[k]={provider:it.provider,model:it.model,total_tokens:0,msg_count:0};
+    map[k].total_tokens+=it.total_tokens;
+    map[k].msg_count+=it.msg_count;
+  }
+  return Object.values(map).sort((a,b)=>b.total_tokens-a.total_tokens);
+}
+
+function updateDerived(){
+  const sel=calendarSelection;
+  const s=sel?sel.start:null, e=sel?sel.end:null;
+  const models=aggregateModels(dailyData,s,e);
+  const total=models.reduce((a,m)=>a+m.total_tokens,0);
+
+  const selTok=document.getElementById("selectedDateTokens");
+  const selLbl=document.getElementById("selectedDateLabel");
+  const prefix=document.getElementById("modelTotalPrefix");
+  const target=sel?total:summaryTotal;
+  if(sel){
+    const sd=new Date(s), ed=new Date(e);
+    const sTxt=`${sd.getMonth()+1}月${sd.getDate()}日`, eTxt=`${ed.getMonth()+1}月${ed.getDate()}日`;
+    selLbl.textContent = s===e ? `${sTxt} 消耗` : `${sTxt}-${eTxt} 消耗`;
+    prefix.textContent = `${s===e?sTxt:sTxt+"-"+eTxt} 共消耗：`;
+  } else {
+    selLbl.textContent = "全部时间消耗";
+    prefix.textContent = "累计消耗：";
+  }
+  animateNum(selTok, target, formatNum);
+  animateNum(document.getElementById("modelTotalNum"), target, v=>v.toLocaleString());
+  renderModel(models);
+}
+
+// ---- Model doughnut (smooth update) ----
+function renderModel(models){
+  modelSeries=models;
+  const ctx=document.getElementById("modelChart").getContext("2d");
+  const top=models.slice(0,8);
+  const others=models.slice(8).reduce((s,m)=>s+m.total_tokens,0);
+  const labels=top.map(m=>`${m.provider} / ${m.model}`);
+  const data=top.map(m=>m.total_tokens);
+  const bg=chartColors.slice(0);
+  if(others>0){ labels.push("其他"); data.push(others); bg.push(cssVar("--txt3","#6e717a")); }
+  const border=cssVar("--border","#2a2d35");
+  const card=cssVar("--card","#1a1d23");
+  const txt1=cssVar("--txt","#e8e8ea");
+  const txt2=cssVar("--txt2","#a0a3ab");
+
+  if(modelChart){
+    modelChart.data.labels=labels;
+    modelChart.data.datasets[0].data=data;
+    modelChart.data.datasets[0].backgroundColor=bg;
+    modelChart.data.datasets[0].borderColor=border;
+    modelChart.options.plugins.tooltip.backgroundColor=card;
+    modelChart.options.plugins.tooltip.titleColor=txt1;
+    modelChart.options.plugins.tooltip.bodyColor=txt2;
+    modelChart.options.plugins.tooltip.borderColor=border;
+    modelChart.update();
+  } else {
+    modelChart=new Chart(ctx,{
+      type:"doughnut",
+      data:{labels,datasets:[{data,backgroundColor:bg,borderColor:border,borderWidth:2,hoverOffset:8}]},
+      options:{responsive:true,maintainAspectRatio:false,animation:{duration:600},cutout:"30%",plugins:{legend:{display:false},tooltip:{backgroundColor:card,titleColor:txt1,bodyColor:txt2,borderColor:border,borderWidth:1,padding:12,callbacks:{label:(item)=>{ const t=item.dataset.data.reduce((a,b)=>a+b,0); return ` ${formatNum(item.raw)} tokens (${t?(item.raw/t*100).toFixed(1):0}%)`; }}}}}
+    });
+  }
+  renderModelList(models);
+}
+
+function renderModelList(models){
+  const list=document.getElementById("modelList");
+  const total=models.reduce((s,m)=>s+m.total_tokens,0);
+  let html="";
+  models.slice(0,20).forEach((m,i)=>{
+    const pct=total>0?(m.total_tokens/total*100).toFixed(1):0;
+    html+=`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+      <span style="width:10px;height:10px;border-radius:3px;flex:none;background:${chartColors[i%chartColors.length]}"></span>
+      <span style="flex:1;color:var(--txt2)">${esc(m.provider)} / ${esc(m.model)}</span>
+      <span style="font-weight:700;color:var(--txt)">${formatNum(m.total_tokens)}</span>
+      <span style="color:var(--txt3);width:45px;text-align:right">${pct}%</span>
+    </div>`;
+  });
+  list.innerHTML=html||'<div style="color:var(--txt3);padding:20px;text-align:center">暂无数据</div>';
+}
+
+// ---- Session board ----
+function renderSessions(sessions){
+  const body=document.getElementById("sessBody");
+  if(!sessions||!sessions.length){ body.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--txt3);padding:20px">暂无数据</td></tr>'; return; }
+  let html="";
+  for(const s of sessions){
+    const cache=s.cache_read+s.cache_write;
+    html+=`<tr>
+      <td>${esc(s.time)}</td>
+      <td><span class="tag">${esc(s.provider)}</span></td>
+      <td>${esc(s.model)}</td>
+      <td class="in">${s.input.toLocaleString()}</td>
+      <td class="out">${s.output.toLocaleString()}</td>
+      <td class="in">${s.reasoning.toLocaleString()}</td>
+      <td class="in">${cache.toLocaleString()}</td>
+      <td class="sum">${s.total.toLocaleString()}</td>
+      <td class="preview">${esc(s.title)||"<span style='opacity:.5'>（未命名会话）</span>"}</td>
+    </tr>`;
+  }
+  body.innerHTML=html;
+}
+
+// ---- Theme switcher ----
+const themeBtns=document.querySelectorAll(".theme-btn");
+function applyTheme(theme){
+  document.documentElement.setAttribute("data-theme",theme);
+  localStorage.setItem("token-panel-theme",theme);
+  themeBtns.forEach(b=>b.classList.toggle("active",b.dataset.theme===theme));
+  // recreate charts so colors refresh
+  if(modelChart){ modelChart.destroy(); modelChart=null; }
+  // 强制下次 refresh() 重绘（否则数据签名未变会被跳过，图表就没了）
+  lastSig = "";
+  // 立即用已缓存数据重建图表，避免切换瞬间图表消失
+  if(dailyData && dailyData.length){
+    updateDerived();
+  }
+  refresh();
+}
+themeBtns.forEach(btn=>btn.addEventListener("click",()=>applyTheme(btn.dataset.theme)));
+applyTheme(localStorage.getItem("token-panel-theme")||"dark");
+
+// ---- Init + 1s auto refresh ----
+setInterval(refresh, 1000);
+</script>
+</body>
+</html>
